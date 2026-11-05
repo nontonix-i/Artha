@@ -19,6 +19,7 @@ data class Product(
     @DocumentId val id: String = "",
     val name: String = "",
     val code: String = "",
+    val brandOrOrigin: String = "Pabrik Utama", // Pabrik A, Pabrik B, Merk ABC, etc.
     val sellPrice: Double = 0.0,
     val hppPrice: Double = 0.0,
     val savingsPerUnit: Double = 500.0,
@@ -43,6 +44,7 @@ data class UserStock(
     val userId: String = "",
     val productId: String = "",
     val productName: String = "",
+    val brandOrOrigin: String = "",
     val totalAvailableStock: Long = 0L,
     val rolloverFromLastWeek: Long = 0L,
     val currentWeekAllocation: Long = 0L,
@@ -59,6 +61,7 @@ data class WeeklyPool(
     val weekIdentifier: String = "", // e.g. "Minggu 45 (Nov 2026)"
     val productId: String = "",
     val productName: String = "",
+    val brandOrOrigin: String = "",
     val totalPoolQty: Long = 0L,
     val allocatedQty: Long = 0L,
     val createdBy: String = "",
@@ -77,6 +80,7 @@ data class TransferRecord(
     val toUserName: String = "",
     val productId: String = "",
     val productName: String = "",
+    val brandOrOrigin: String = "",
     val quantity: Long = 0L,
     val note: String = "",
     @ServerTimestamp val timestamp: Timestamp? = null
@@ -90,8 +94,10 @@ data class DebtRecord(
     val type: String = "SETORAN_TERTUNDA", // "SETORAN_TERTUNDA" or "PINJAM_BARANG"
     val productId: String = "",
     val productName: String = "",
+    val brandOrOrigin: String = "",
     val quantity: Long = 0L,
     val totalNominal: Double = 0.0,
+    val note: String = "",
     val isSettled: Boolean = false,
     val settledAt: Timestamp? = null,
     @ServerTimestamp val createdAt: Timestamp? = null
@@ -104,6 +110,7 @@ data class SaleTransaction(
     val userName: String = "",
     val productId: String = "",
     val productName: String = "",
+    val brandOrOrigin: String = "",
     val quantity: Long = 0L,
     val sellPricePerUnit: Double = 0.0,
     val hppPerUnit: Double = 0.0,
@@ -115,5 +122,17 @@ data class SaleTransaction(
     val totalMandatoryDeposit: Double = 0.0,
     val netMarginSales: Double = 0.0,
     val isDepositSettled: Boolean = false,
+    val note: String = "",
+    @ServerTimestamp val timestamp: Timestamp? = null
+)
+
+@IgnoreExtraProperties
+data class SavingsRecord(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val userName: String = "",
+    val type: String = "SETOR_MANDIRI", // "SETOR_MANDIRI" or "TARIK"
+    val nominal: Double = 0.0,
+    val note: String = "",
     @ServerTimestamp val timestamp: Timestamp? = null
 )

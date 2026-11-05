@@ -104,6 +104,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
         val payload = mapOf(
             "name" to product.name,
             "code" to product.code,
+            "brandOrOrigin" to product.brandOrOrigin,
             "sellPrice" to product.sellPrice,
             "hppPrice" to product.hppPrice,
             "savingsPerUnit" to product.savingsPerUnit,
@@ -196,6 +197,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                 "userName" to transaction.userName,
                 "productId" to transaction.productId,
                 "productName" to transaction.productName,
+                "brandOrOrigin" to transaction.brandOrOrigin,
                 "quantity" to transaction.quantity,
                 "sellPricePerUnit" to transaction.sellPricePerUnit,
                 "hppPerUnit" to transaction.hppPerUnit,
@@ -207,6 +209,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                 "totalMandatoryDeposit" to transaction.totalMandatoryDeposit,
                 "netMarginSales" to transaction.netMarginSales,
                 "isDepositSettled" to transaction.isDepositSettled,
+                "note" to transaction.note,
                 "timestamp" to FieldValue.serverTimestamp()
             )
             batch.set(txDocRef, txPayload)
@@ -218,6 +221,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                     "userId" to uid,
                     "productId" to transaction.productId,
                     "productName" to transaction.productName,
+                    "brandOrOrigin" to transaction.brandOrOrigin,
                     "totalAvailableStock" to FieldValue.increment(-transaction.quantity),
                     "soldCount" to FieldValue.increment(transaction.quantity),
                     "updatedAt" to FieldValue.serverTimestamp()
@@ -244,6 +248,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                 "weekIdentifier" to pool.weekIdentifier,
                 "productId" to pool.productId,
                 "productName" to pool.productName,
+                "brandOrOrigin" to pool.brandOrOrigin,
                 "totalPoolQty" to pool.totalPoolQty,
                 "allocatedQty" to pool.allocatedQty,
                 "createdBy" to uid,
@@ -262,6 +267,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                             "userId" to targetUserId,
                             "productId" to pool.productId,
                             "productName" to pool.productName,
+                            "brandOrOrigin" to pool.brandOrOrigin,
                             "totalAvailableStock" to FieldValue.increment(qty),
                             "currentWeekAllocation" to FieldValue.increment(qty),
                             "updatedAt" to FieldValue.serverTimestamp()
@@ -338,6 +344,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                 "toUserName" to transfer.toUserName,
                 "productId" to transfer.productId,
                 "productName" to transfer.productName,
+                "brandOrOrigin" to transfer.brandOrOrigin,
                 "quantity" to transfer.quantity,
                 "note" to transfer.note,
                 "timestamp" to FieldValue.serverTimestamp()
@@ -351,6 +358,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                     "userId" to fromUid,
                     "productId" to transfer.productId,
                     "productName" to transfer.productName,
+                    "brandOrOrigin" to transfer.brandOrOrigin,
                     "totalAvailableStock" to FieldValue.increment(-transfer.quantity),
                     "transfersSent" to FieldValue.increment(transfer.quantity),
                     "updatedAt" to FieldValue.serverTimestamp()
@@ -365,6 +373,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                     "userId" to toUid,
                     "productId" to transfer.productId,
                     "productName" to transfer.productName,
+                    "brandOrOrigin" to transfer.brandOrOrigin,
                     "totalAvailableStock" to FieldValue.increment(transfer.quantity),
                     "transfersReceived" to FieldValue.increment(transfer.quantity),
                     "updatedAt" to FieldValue.serverTimestamp()
@@ -410,8 +419,10 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
             "type" to debt.type,
             "productId" to debt.productId,
             "productName" to debt.productName,
+            "brandOrOrigin" to debt.brandOrOrigin,
             "quantity" to debt.quantity,
             "totalNominal" to debt.totalNominal,
+            "note" to debt.note,
             "isSettled" to false,
             "settledAt" to null,
             "createdAt" to FieldValue.serverTimestamp()
@@ -426,6 +437,7 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
                     "userId" to uid,
                     "productId" to debt.productId,
                     "productName" to debt.productName,
+                    "brandOrOrigin" to debt.brandOrOrigin,
                     "totalAvailableStock" to FieldValue.increment(debt.quantity),
                     "debtBorrowed" to FieldValue.increment(debt.quantity),
                     "updatedAt" to FieldValue.serverTimestamp()
@@ -447,4 +459,68 @@ class ArthaStockRepository(val db: FirebaseFirestore) {
             )
         ).await()
     }
+
+    // --- DEPOSIT SETTLEMENT (SETOR KAS KE PABRIK) ---
+    suspend fun settleDeposit(transactionId: String): Result<Unit> = runCatching {
+        requireUserId()
+        val docRef = db.collection("transactions").document(transactionId)
+        docRef.update(
+            mapOf(
+                "isDepositSettled" to true
+            )
+        ).await()
+    }
+
+    suspend fun settleAllDeposits(transactionIds: List<String>): Result<Unit> = runCatching {
+        requireUserId()
+        if (transactionIds.isEmpty()) return@runCatching
+        db.runBatch { batch ->
+            transactionIds.forEach { id ->
+                val docRef = db.collection("transactions").document(id)
+                batch.update(docRef, "isDepositSettled", true)
+            }
+        }.await()
+    }
+
+    // --- PUNDI TABUNGAN (SETOR MANDIRI & PENARIKAN) ---
+    fun observeSavingsRecords(userId: String): Flow<List<SavingsRecord>> = flow {
+        val path = "savings_records"
+        emitAll(
+            db.collection(path)
+                .whereEqualTo("userId", userId)
+                .snapshots()
+                .map { snapshot ->
+                    snapshot.toObjects(SavingsRecord::class.java)
+                        .sortedByDescending { it.timestamp?.seconds ?: 0L }
+                }
+                .catch { error ->
+                    val firestoreError = generateSequence(error) { it.cause }
+                        .filterIsInstance<FirebaseFirestoreException>()
+                        .firstOrNull()
+                    if (firestoreError == null && error is CancellationException) throw error
+                    val exceptionToLog = firestoreError ?: (error as? Exception)
+                    if (exceptionToLog != null) {
+                        handleFirestoreError(exceptionToLog, OperationType.LIST, path)
+                    }
+                    throw error
+                }
+        )
+    }
+
+    suspend fun recordSavingsAction(record: SavingsRecord): Result<String> = runCatching {
+        val uid = requireUserId()
+        require(record.nominal > 0) { "Nominal harus lebih dari 0." }
+        val docRef = db.collection("savings_records").document()
+        val payload = mapOf(
+            "userId" to uid,
+            "userName" to record.userName,
+            "type" to record.type,
+            "nominal" to record.nominal,
+            "note" to record.note,
+            "timestamp" to FieldValue.serverTimestamp()
+        )
+        docRef.set(payload).await()
+        docRef.id
+    }
 }
+

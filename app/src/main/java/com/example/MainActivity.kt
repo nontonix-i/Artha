@@ -105,10 +105,17 @@ fun MainAppScaffold(
     var showTransferDialog by remember { mutableStateOf(false) }
     var showDebtDialog by remember { mutableStateOf(false) }
     var showNewProductDialog by remember { mutableStateOf(false) }
+    var showDepositPaymentDialog by remember { mutableStateOf(false) }
+    var showSavingsDepositDialog by remember { mutableStateOf(false) }
+    var showSavingsWithdrawDialog by remember { mutableStateOf(false) }
+    var showDebtPaymentDialog by remember { mutableStateOf(false) }
     var showSignOutConfirm by remember { mutableStateOf(false) }
 
     val products by viewModel.products.collectAsState()
     val teamUsers by viewModel.teamUsers.collectAsState()
+    val transactions by viewModel.transactions.collectAsState()
+    val debts by viewModel.debts.collectAsState()
+    val metrics by viewModel.financialMetrics.collectAsState()
     val statusMessage by viewModel.statusMessage.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -252,6 +259,10 @@ fun MainAppScaffold(
                     onOpenTransferDialog = { showTransferDialog = true },
                     onOpenPoolDialog = { showPoolDialog = true },
                     onOpenDebtDialog = { showDebtDialog = true },
+                    onOpenDepositPaymentDialog = { showDepositPaymentDialog = true },
+                    onOpenSavingsDepositDialog = { showSavingsDepositDialog = true },
+                    onOpenSavingsWithdrawDialog = { showSavingsWithdrawDialog = true },
+                    onOpenDebtPaymentDialog = { showDebtPaymentDialog = true },
                     onViewAllHistory = { selectedScreenIndex = 3 }
                 )
                 1 -> InventoryScreen(
@@ -263,7 +274,8 @@ fun MainAppScaffold(
                 2 -> OperationsScreen(
                     viewModel = viewModel,
                     onOpenTransferDialog = { showTransferDialog = true },
-                    onOpenDebtDialog = { showDebtDialog = true }
+                    onOpenDebtDialog = { showDebtDialog = true },
+                    onOpenDebtPaymentDialog = { showDebtPaymentDialog = true }
                 )
                 3 -> HistoryScreen(
                     viewModel = viewModel
@@ -277,8 +289,8 @@ fun MainAppScaffold(
         SellDialog(
             products = products,
             onDismiss = { showSellDialog = false },
-            onConfirmSale = { prod, qty, isSavingsIncluded ->
-                viewModel.recordSale(prod, qty, isSavingsIncluded) {
+            onConfirmSale = { prod, qty, isSavingsIncluded, note ->
+                viewModel.recordSale(prod, qty, isSavingsIncluded, note) {
                     showSellDialog = false
                 }
             }
@@ -315,15 +327,70 @@ fun MainAppScaffold(
         )
     }
 
-    // Debt & Loan Dialog
+    // Debt & Loan Dialog (Catat baru dengan HPP untuk pinjam barang & optional note)
     if (showDebtDialog) {
         DebtDialog(
             products = products,
             onDismiss = { showDebtDialog = false },
-            onConfirmDebt = { type, prod, qty, nominal ->
-                viewModel.recordDebt(type, prod, qty, nominal) {
+            onConfirmDebt = { type, prod, qty, nominal, note ->
+                viewModel.recordDebt(type, prod, qty, nominal, note) {
                     showDebtDialog = false
                 }
+            }
+        )
+    }
+
+    // Bayar Setoran Pabrik Dialog (Bisa filter & setor pisah per merk/pabrik)
+    if (showDepositPaymentDialog) {
+        val pendingTxs = transactions.filter { !it.isDepositSettled }
+        DepositPaymentDialog(
+            pendingTransactions = pendingTxs,
+            onDismiss = { showDepositPaymentDialog = false },
+            onSettleSingle = { txId ->
+                viewModel.settleDeposit(txId)
+            },
+            onSettleAll = { txIds ->
+                viewModel.settleDepositsList(txIds) {
+                    showDepositPaymentDialog = false
+                }
+            }
+        )
+    }
+
+    // Tambah Tabungan Langsung (Nabung Mandiri) Dialog
+    if (showSavingsDepositDialog) {
+        SavingsDepositDialog(
+            currentSavingsBalance = metrics.totalSavings,
+            onDismiss = { showSavingsDepositDialog = false },
+            onConfirmDeposit = { nominal, note ->
+                viewModel.addManualSavings(nominal, note) {
+                    showSavingsDepositDialog = false
+                }
+            }
+        )
+    }
+
+    // Ambil Tabungan (Penarikan) Dialog
+    if (showSavingsWithdrawDialog) {
+        SavingsWithdrawDialog(
+            currentSavingsBalance = metrics.totalSavings,
+            onDismiss = { showSavingsWithdrawDialog = false },
+            onConfirmWithdraw = { nominal, note ->
+                viewModel.withdrawSavings(nominal, note) {
+                    showSavingsWithdrawDialog = false
+                }
+            }
+        )
+    }
+
+    // Bayar / Pelunasan Hutang Dialog
+    if (showDebtPaymentDialog) {
+        val pendingDebts = debts.filter { !it.isSettled }
+        DebtPaymentDialog(
+            pendingDebts = pendingDebts,
+            onDismiss = { showDebtPaymentDialog = false },
+            onSettleDebt = { debtId ->
+                viewModel.settleDebt(debtId)
             }
         )
     }
@@ -332,8 +399,8 @@ fun MainAppScaffold(
     if (showNewProductDialog) {
         NewProductDialog(
             onDismiss = { showNewProductDialog = false },
-            onConfirmProduct = { name, code, sell, hpp, sav ->
-                viewModel.createNewProduct(name, code, sell, hpp, sav) {
+            onConfirmProduct = { name, code, brandOrOrigin, sell, hpp, sav ->
+                viewModel.createNewProduct(name, code, brandOrOrigin, sell, hpp, sav) {
                     showNewProductDialog = false
                 }
             }

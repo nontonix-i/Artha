@@ -23,14 +23,16 @@ import com.example.ui.theme.*
 @Composable
 fun NewProductDialog(
     onDismiss: () -> Unit,
-    onConfirmProduct: (name: String, code: String, sellPrice: Double, hppPrice: Double, savings: Double) -> Unit
+    onConfirmProduct: (name: String, code: String, brandOrOrigin: String, sellPrice: Double, hppPrice: Double, savings: Double) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
+    var brandOrOrigin by remember { mutableStateOf("Pabrik A") }
     var sellPriceText by remember { mutableStateOf("15000") }
     var hppPriceText by remember { mutableStateOf("11000") }
     var savingsText by remember { mutableStateOf("500") }
 
+    val quickBrands = listOf("Pabrik A", "Pabrik B", "Pabrik C", "Merk Utama")
     val sellPrice = sellPriceText.toDoubleOrNull() ?: 0.0
     val hppPrice = hppPriceText.toDoubleOrNull() ?: 0.0
     val savings = savingsText.toDoubleOrNull() ?: 0.0
@@ -72,7 +74,7 @@ fun NewProductDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Nama Produk (cth: Minyak Goreng 1L)") },
+                    label = { Text("Nama Produk (cth: Kopi Robusta 250g)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
@@ -80,10 +82,35 @@ fun NewProductDialog(
 
                 Spacer(modifier = Modifier.height(10.dp))
 
+                // Brand / Pabrik Asal
+                OutlinedTextField(
+                    value = brandOrOrigin,
+                    onValueChange = { brandOrOrigin = it },
+                    label = { Text("Asal Pabrik / Merk Barang") },
+                    placeholder = { Text("Contoh: Pabrik A / Merk ABC") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    quickBrands.forEach { b ->
+                        SuggestionChip(
+                            onClick = { brandOrOrigin = b },
+                            label = { Text(b, fontSize = 10.sp) }
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it },
-                    label = { Text("Kode SKU / Barcode") },
+                    label = { Text("Kode SKU / Barcode (Opsional)") },
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     singleLine = true
@@ -117,7 +144,7 @@ fun NewProductDialog(
                 OutlinedTextField(
                     value = savingsText,
                     onValueChange = { savingsText = it.filter { c -> c.isDigit() } },
-                    label = { Text("Porsi Tabungan per Pcs (Rp)") },
+                    label = { Text("Porsi Tabungan per Unit (Rp)") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -139,6 +166,13 @@ fun NewProductDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
+                            Text("Asal Pabrik/Merk:", fontSize = 12.sp, color = CobaltDark)
+                            Text(brandOrOrigin.ifBlank { "Pabrik Utama" }, fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CobaltDark)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
                             Text("Setor Wajib Standar:", fontSize = 12.sp, color = CobaltDark)
                             Text(formatRupiah(mandatoryDeposit), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CobaltDark)
                         }
@@ -146,7 +180,7 @@ fun NewProductDialog(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Margin Laba Sales per Pcs:", fontSize = 12.sp, color = CobaltDark)
+                            Text("Margin Laba Sales per Unit:", fontSize = 12.sp, color = CobaltDark)
                             Text(formatRupiah(estimatedMargin), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ProfitGreen)
                         }
                     }
@@ -157,7 +191,7 @@ fun NewProductDialog(
                 Button(
                     onClick = {
                         if (name.isNotBlank()) {
-                            onConfirmProduct(name, code, sellPrice, hppPrice, savings)
+                            onConfirmProduct(name, code, brandOrOrigin, sellPrice, hppPrice, savings)
                         }
                     },
                     enabled = name.isNotBlank(),

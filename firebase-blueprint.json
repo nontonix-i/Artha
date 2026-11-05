@@ -129,6 +129,21 @@
         "timestamp": { "type": "string", "format": "date-time", "description": "Sale timestamp" }
       },
       "required": ["userId", "productId", "quantity", "totalRevenue", "totalMandatoryDeposit", "timestamp"]
+    },
+    "SavingsRecord": {
+      "title": "SavingsRecord",
+      "description": "Manual savings deposit (top-up) or withdrawal ledger",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Savings record ID" },
+        "userId": { "type": "string", "description": "User UID" },
+        "userName": { "type": "string", "description": "User display name" },
+        "type": { "type": "string", "enum": ["SETOR_MANDIRI", "TARIK"], "description": "Deposit or withdrawal" },
+        "nominal": { "type": "number", "description": "Monetary value" },
+        "note": { "type": "string", "description": "Transaction note or description" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Timestamp of action" }
+      },
+      "required": ["userId", "type", "nominal", "timestamp"]
     }
   },
   "firestore": {
@@ -155,6 +170,10 @@
     "/debts/{debtId}": {
       "schema": "DebtRecord",
       "description": "Debt and pending deposit tracking records"
+    },
+    "/savings_records/{recordId}": {
+      "schema": "SavingsRecord",
+      "description": "Ledger of manual savings deposits and withdrawals"
     },
     "/transactions/{transactionId}": {
       "schema": "Transaction",

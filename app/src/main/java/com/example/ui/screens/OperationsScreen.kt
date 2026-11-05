@@ -29,6 +29,7 @@ fun OperationsScreen(
     viewModel: MainViewModel,
     onOpenTransferDialog: () -> Unit,
     onOpenDebtDialog: () -> Unit,
+    onOpenDebtPaymentDialog: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(0) } // 0: Transfers, 1: Debts
@@ -133,17 +134,38 @@ fun OperationsScreen(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 item {
-                    Button(
-                        onClick = onOpenDebtDialog,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(46.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = DebtRed),
-                        shape = RoundedCornerShape(12.dp)
+                    val pendingDebtsCount = debts.count { !it.isSettled }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Catat Hutang / Pinjaman Baru", fontWeight = FontWeight.Bold)
+                        Button(
+                            onClick = onOpenDebtDialog,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(46.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = DebtRed),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Catat Hutang", fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        }
+
+                        if (pendingDebtsCount > 0) {
+                            FilledTonalButton(
+                                onClick = onOpenDebtPaymentDialog,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(46.dp),
+                                colors = ButtonDefaults.filledTonalButtonColors(containerColor = ProfitGreenLight),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = ProfitGreen, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("Bayar ($pendingDebtsCount)", fontWeight = FontWeight.Bold, color = ProfitGreen, fontSize = 12.sp)
+                            }
+                        }
                     }
                 }
 

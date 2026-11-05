@@ -168,12 +168,28 @@ fun ProductStockCard(
                 verticalAlignment = Alignment.Top
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = product.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = TextPrimary
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = product.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(CobaltContainer)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        ) {
+                            Text(
+                                text = product.brandOrOrigin.ifBlank { "Pabrik Utama" },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = CobaltPrimary
+                            )
+                        }
+                    }
                     Text(
                         text = "SKU: ${product.code.ifBlank { "-" }} | HPP: ${formatRupiah(product.hppPrice)} | Tabungan: ${formatRupiah(product.savingsPerUnit)}",
                         fontSize = 11.sp,

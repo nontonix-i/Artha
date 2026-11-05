@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,12 +11,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.example.data.model.Product
+import com.example.ui.components.formatRupiah
 import com.example.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -23,13 +26,18 @@ import com.example.ui.theme.*
 fun DebtDialog(
     products: List<Product>,
     onDismiss: () -> Unit,
-    onConfirmDebt: (type: String, product: Product?, quantity: Long, nominal: Double) -> Unit
+    onConfirmDebt: (type: String, product: Product?, quantity: Long, nominal: Double, note: String) -> Unit
 ) {
     var selectedType by remember { mutableStateOf("SETORAN_TERTUNDA") } // or "PINJAM_BARANG"
     var selectedProduct by remember { mutableStateOf(products.firstOrNull()) }
     var quantityText by remember { mutableStateOf("1") }
-    var nominalText by remember { mutableStateOf("50000") }
+    var noteInput by remember { mutableStateOf("") }
     var expandedProductDropdown by remember { mutableStateOf(false) }
+
+    val initialNominal = if (products.isNotEmpty()) {
+        products.first().hppPrice.toLong().toString()
+    } else "50000"
+    var nominalText by remember { mutableStateOf(initialNominal) }
 
     Dialog(onDismissRequest = onDismiss) {
         Card(
@@ -58,8 +66,8 @@ fun DebtDialog(
                             color = DebtRed
                         )
                         Text(
-                            text = "Tunggakan setoran kas atau pinjam barang",
-                            fontSize = 12.sp,
+                            text = "Tunggakan kas atau pinjam barang (HPP pabrik)",
+                            fontSize = 11.sp,
                             color = TextSecondary
                         )
                     }
@@ -78,13 +86,19 @@ fun DebtDialog(
                     FilterChip(
                         selected = selectedType == "SETORAN_TERTUNDA",
                         onClick = { selectedType = "SETORAN_TERTUNDA" },
-                        label = { Text("Hutang Setoran", fontSize = 12.sp) },
+                        label = { Text("Hutang Setoran Kas", fontSize = 11.sp) },
                         modifier = Modifier.weight(1f)
                     )
                     FilterChip(
                         selected = selectedType == "PINJAM_BARANG",
-                        onClick = { selectedType = "PINJAM_BARANG" },
-                        label = { Text("Pinjam Barang", fontSize = 12.sp) },
+                        onClick = {
+                            selectedType = "PINJAM_BARANG"
+                            selectedProduct?.let { p ->
+                                val q = quantityText.toLongOrNull() ?: 1L
+                                nominalText = (p.hppPrice * q).toLong().toString()
+                            }
+                        },
+                        label = { Text("Pinjam Barang (HPP)", fontSize = 11.sp) },
                         modifier = Modifier.weight(1f)
                     )
                 }
@@ -99,7 +113,7 @@ fun DebtDialog(
                         onExpandedChange = { expandedProductDropdown = !expandedProductDropdown }
                     ) {
                         OutlinedTextField(
-                            value = selectedProduct?.name ?: "Pilih Barang",
+                            value = "${selectedProduct?.name ?: "Pilih Barang"} [${selectedProduct?.brandOrOrigin ?: "Pabrik Utama"}]",
                             onValueChange = {},
                             readOnly = true,
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedProductDropdown) },
@@ -112,12 +126,27 @@ fun DebtDialog(
                         ) {
                             products.forEach { prod ->
                                 DropdownMenuItem(
-                                    text = { Text(prod.name, fontWeight = FontWeight.SemiBold) },
+                                    text = {
+                                        Column {
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween
+                                            ) {
+                                                Text(prod.name, fontWeight = FontWeight.SemiBold)
+                                                Text(prod.brandOrOrigin.ifBlank { "Pabrik Utama" }, fontSize = 11.sp, color = CobaltPrimary, fontWeight = FontWeight.Bold)
+                                            }
+                                            Text(
+                                                "Modal HPP: ${formatRupiah(prod.hppPrice)} (Bukan harga jual)",
+                                                fontSize = 11.sp,
+                                                color = TextSecondary
+                                            )
+                                        }
+                                    },
                                     onClick = {
                                         selectedProduct = prod
                                         expandedProductDropdown = false
-                                        // Auto calculate estimated nominal
-                                        nominalText = (prod.sellPrice * (quantityText.toLongOrNull() ?: 1L)).toLong().toString()
+                                        val q = quantityText.toLongOrNull() ?: 1L
+                                        nominalText = (prod.hppPrice * q).toLong().toString()
                                     }
                                 )
                             }
@@ -134,7 +163,7 @@ fun DebtDialog(
                             quantityText = newVal.filter { it.isDigit() }
                             val q = quantityText.toLongOrNull() ?: 0L
                             selectedProduct?.let { p ->
-                                nominalText = (p.sellPrice * q).toLong().toString()
+                                nominalText = (p.hppPrice * q).toLong().toString()
                             }
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -142,6 +171,26 @@ fun DebtDialog(
                         shape = RoundedCornerShape(12.dp),
                         singleLine = true
                     )
+
+                    Spacer(modifier = Modifier.height(6.dp))
+
+                    selectedProduct?.let { p ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(DebtRedLight)
+                                .padding(8.dp)
+                        ) {
+                            Text(
+                                text = "Dihitung berdasarkan Modal Pokok HPP (${formatRupiah(p.hppPrice)} / unit), BUKAN harga jual konsumen.",
+                                fontSize = 11.sp,
+                                color = DebtRed,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
                     Spacer(modifier = Modifier.height(10.dp))
                 }
 
@@ -157,14 +206,27 @@ fun DebtDialog(
                     singleLine = true
                 )
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Optional Note
+                OutlinedTextField(
+                    value = noteInput,
+                    onValueChange = { noteInput = it },
+                    label = { Text("Keterangan / Catatan (Opsional)") },
+                    placeholder = { Text("Contoh: Pinjam display toko / titip bayar") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Submit Button
                 Button(
                     onClick = {
                         val qty = quantityText.toLongOrNull() ?: 0L
                         val nominal = nominalText.toDoubleOrNull() ?: 0.0
-                        onConfirmDebt(selectedType, selectedProduct, qty, nominal)
+                        onConfirmDebt(selectedType, selectedProduct, qty, nominal, noteInput)
                     },
                     modifier = Modifier
                         .fillMaxWidth()

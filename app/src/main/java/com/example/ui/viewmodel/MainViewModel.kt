@@ -11,10 +11,17 @@ import kotlinx.coroutines.launch
 data class FinancialMetrics(
     val totalRevenue: Double = 0.0,
     val totalMandatoryDeposit: Double = 0.0,
-    val totalSavings: Double = 0.0,
+    val pendingMandatoryDeposit: Double = 0.0,
+    val settledMandatoryDeposit: Double = 0.0,
+    val pendingDepositCount: Int = 0,
+    val totalSavings: Double = 0.0, // Saldo tabungan aktif (penjualan + setor mandiri - tarik)
+    val savingsFromSales: Double = 0.0,
+    val savingsManualAdded: Double = 0.0,
+    val savingsWithdrawn: Double = 0.0,
     val totalNetProfit: Double = 0.0,
     val pendingDebtNominal: Double = 0.0,
-    val pendingDebtCount: Int = 0
+    val pendingDebtCount: Int = 0,
+    val totalAvailableStock: Long = 0L
 )
 
 class MainViewModel(
@@ -38,23 +45,48 @@ class MainViewModel(
     val debts: StateFlow<List<DebtRecord>> = repository.observeDebts(currentUserId)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
+    val savingsRecords: StateFlow<List<SavingsRecord>> = repository.observeSavingsRecords(currentUserId)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
+
     val teamUsers: StateFlow<List<UserProfile>> = repository.observeAllUsers()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), emptyList())
 
-    val financialMetrics: StateFlow<FinancialMetrics> = combine(transactions, debts) { txList, debtList ->
+    val financialMetrics: StateFlow<FinancialMetrics> = combine(
+        transactions,
+        debts,
+        savingsRecords,
+        userStock
+    ) { txList, debtList, savingsList, stockList ->
         val rev = txList.sumOf { it.totalRevenue }
         val deposit = txList.sumOf { it.totalMandatoryDeposit }
-        val savings = txList.sumOf { it.totalSavings }
+        val pendingTxs = txList.filter { !it.isDepositSettled }
+        val pendingDeposit = pendingTxs.sumOf { it.totalMandatoryDeposit }
+        val settledDeposit = txList.filter { it.isDepositSettled }.sumOf { it.totalMandatoryDeposit }
+
+        val savFromSales = txList.sumOf { it.totalSavings }
+        val savManual = savingsList.filter { it.type == "SETOR_MANDIRI" }.sumOf { it.nominal }
+        val savWithdrawn = savingsList.filter { it.type == "TARIK" }.sumOf { it.nominal }
+        val netSavings = (savFromSales + savManual - savWithdrawn).coerceAtLeast(0.0)
+
         val profit = txList.sumOf { it.netMarginSales }
         val pendingDebts = debtList.filter { !it.isSettled }
         val debtNominal = pendingDebts.sumOf { it.totalNominal }
+        val availableStockSum = stockList.sumOf { it.totalAvailableStock }
+
         FinancialMetrics(
             totalRevenue = rev,
             totalMandatoryDeposit = deposit,
-            totalSavings = savings,
+            pendingMandatoryDeposit = pendingDeposit,
+            settledMandatoryDeposit = settledDeposit,
+            pendingDepositCount = pendingTxs.size,
+            totalSavings = netSavings,
+            savingsFromSales = savFromSales,
+            savingsManualAdded = savManual,
+            savingsWithdrawn = savWithdrawn,
             totalNetProfit = profit,
             pendingDebtNominal = debtNominal,
-            pendingDebtCount = pendingDebts.size
+            pendingDebtCount = pendingDebts.size,
+            totalAvailableStock = availableStockSum
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000L), FinancialMetrics())
 
@@ -72,6 +104,7 @@ class MainViewModel(
         product: Product,
         quantity: Long,
         isSavingsIncluded: Boolean,
+        note: String = "",
         onSuccess: () -> Unit
     ) {
         if (quantity <= 0) return
@@ -91,6 +124,7 @@ class MainViewModel(
                 userName = currentUserName,
                 productId = product.id,
                 productName = product.name,
+                brandOrOrigin = product.brandOrOrigin,
                 quantity = quantity,
                 sellPricePerUnit = product.sellPrice,
                 hppPerUnit = hpp,
@@ -101,13 +135,14 @@ class MainViewModel(
                 totalSavings = totalSavVal,
                 totalMandatoryDeposit = totalDepositVal,
                 netMarginSales = netMargin,
-                isDepositSettled = false
+                isDepositSettled = false,
+                note = note
             )
 
             val result = repository.recordSale(tx)
             _isActionLoading.value = false
             if (result.isSuccess) {
-                _statusMessage.value = "Penjualan berhasil dicatat! Setor wajib: Rp %,.0f".format(totalDepositVal)
+                _statusMessage.value = "Penjualan dicatat! Setor wajib: Rp %,.0f".format(totalDepositVal)
                 onSuccess()
             } else {
                 _statusMessage.value = "Gagal mencatat penjualan: ${result.exceptionOrNull()?.message}"
@@ -115,6 +150,97 @@ class MainViewModel(
         }
     }
 
+    // --- ALUR BAYAR SETORAN WAJIB ---
+    fun settleDeposit(transactionId: String, onSuccess: () -> Unit = {}) {
+        _isActionLoading.value = true
+        viewModelScope.launch {
+            val result = repository.settleDeposit(transactionId)
+            _isActionLoading.value = false
+            if (result.isSuccess) {
+                _statusMessage.value = "Setoran berhasil disetorkan ke kas pabrik!"
+                onSuccess()
+            } else {
+                _statusMessage.value = "Gagal bayar setoran: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun settleAllPendingDeposits(onSuccess: () -> Unit = {}) {
+        val pendingTxIds = transactions.value.filter { !it.isDepositSettled }.map { it.id }
+        settleDepositsList(pendingTxIds, onSuccess)
+    }
+
+    fun settleDepositsList(transactionIds: List<String>, onSuccess: () -> Unit = {}) {
+        _isActionLoading.value = true
+        viewModelScope.launch {
+            if (transactionIds.isEmpty()) {
+                _isActionLoading.value = false
+                _statusMessage.value = "Tidak ada setoran tertunda."
+                return@launch
+            }
+            val result = repository.settleAllDeposits(transactionIds)
+            _isActionLoading.value = false
+            if (result.isSuccess) {
+                _statusMessage.value = "Sebanyak ${transactionIds.size} setoran berhasil disetorkan!"
+                onSuccess()
+            } else {
+                _statusMessage.value = "Gagal menyetor: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    // --- ALUR TABUNGAN: TAMBAH LANGSUNG (NOMINAL MANDIRI) & AMBIL TABUNGAN ---
+    fun addManualSavings(nominal: Double, note: String, onSuccess: () -> Unit) {
+        if (nominal <= 0) return
+        _isActionLoading.value = true
+        viewModelScope.launch {
+            val record = SavingsRecord(
+                userId = currentUserId,
+                userName = currentUserName,
+                type = "SETOR_MANDIRI",
+                nominal = nominal,
+                note = note.ifBlank { "Nabung Mandiri" }
+            )
+            val result = repository.recordSavingsAction(record)
+            _isActionLoading.value = false
+            if (result.isSuccess) {
+                _statusMessage.value = "Berhasil menambah tabungan sebesar Rp %,.0f".format(nominal)
+                onSuccess()
+            } else {
+                _statusMessage.value = "Gagal menambah tabungan: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    fun withdrawSavings(nominal: Double, note: String, onSuccess: () -> Unit) {
+        if (nominal <= 0) return
+        val currentBalance = financialMetrics.value.totalSavings
+        if (nominal > currentBalance) {
+            _statusMessage.value = "Saldo tabungan tidak mencukupi (Tersedia: Rp %,.0f)".format(currentBalance)
+            return
+        }
+
+        _isActionLoading.value = true
+        viewModelScope.launch {
+            val record = SavingsRecord(
+                userId = currentUserId,
+                userName = currentUserName,
+                type = "TARIK",
+                nominal = nominal,
+                note = note.ifBlank { "Penarikan Tabungan" }
+            )
+            val result = repository.recordSavingsAction(record)
+            _isActionLoading.value = false
+            if (result.isSuccess) {
+                _statusMessage.value = "Tabungan berhasil ditarik sebesar Rp %,.0f".format(nominal)
+                onSuccess()
+            } else {
+                _statusMessage.value = "Gagal menarik tabungan: ${result.exceptionOrNull()?.message}"
+            }
+        }
+    }
+
+    // --- ALUR TRANSFER ---
     fun transferGoods(
         toUser: UserProfile,
         product: Product,
@@ -146,29 +272,40 @@ class MainViewModel(
         }
     }
 
+    // --- ALUR CATAT & BAYAR HUTANG ---
     fun recordDebt(
         type: String, // "SETORAN_TERTUNDA" or "PINJAM_BARANG"
         product: Product?,
         quantity: Long,
         totalNominal: Double,
+        note: String = "",
         onSuccess: () -> Unit
     ) {
         _isActionLoading.value = true
         viewModelScope.launch {
+            // Pinjam barang fisik dihitung berbasis harga HPP pabrik/modal, bukan harga jual
+            val finalNominal = if (type == "PINJAM_BARANG" && product != null && quantity > 0) {
+                product.hppPrice * quantity
+            } else {
+                totalNominal
+            }
+
             val debt = DebtRecord(
                 userId = currentUserId,
                 userName = currentUserName,
                 type = type,
                 productId = product?.id ?: "",
                 productName = product?.name ?: if (type == "SETORAN_TERTUNDA") "Setoran Kas Pabrik" else "Barang",
+                brandOrOrigin = product?.brandOrOrigin ?: "",
                 quantity = quantity,
-                totalNominal = totalNominal,
+                totalNominal = finalNominal,
+                note = note,
                 isSettled = false
             )
             val result = repository.createDebtRecord(debt)
             _isActionLoading.value = false
             if (result.isSuccess) {
-                _statusMessage.value = "Catatan hutang/pinjaman berhasil disimpan."
+                _statusMessage.value = "Catatan hutang berhasil disimpan (Nominal: Rp %,.0f)".format(finalNominal)
                 onSuccess()
             } else {
                 _statusMessage.value = "Gagal menyimpan hutang: ${result.exceptionOrNull()?.message}"
@@ -176,19 +313,21 @@ class MainViewModel(
         }
     }
 
-    fun settleDebt(debtId: String) {
+    fun settleDebt(debtId: String, onSuccess: () -> Unit = {}) {
         _isActionLoading.value = true
         viewModelScope.launch {
             val result = repository.settleDebt(debtId)
             _isActionLoading.value = false
             if (result.isSuccess) {
-                _statusMessage.value = "Setoran/Hutang telah dilunasi!"
+                _statusMessage.value = "Hutang/Pinjaman berhasil dilunasi!"
+                onSuccess()
             } else {
                 _statusMessage.value = "Gagal pelunasan: ${result.exceptionOrNull()?.message}"
             }
         }
     }
 
+    // --- ALUR POOL JATAH MINGGUAN ---
     fun distributePool(
         product: Product,
         weekIdentifier: String,
@@ -202,6 +341,7 @@ class MainViewModel(
                 weekIdentifier = weekIdentifier,
                 productId = product.id,
                 productName = product.name,
+                brandOrOrigin = product.brandOrOrigin,
                 totalPoolQty = totalPoolQty,
                 allocatedQty = allocations.values.sum(),
                 createdBy = currentUserId
@@ -220,6 +360,7 @@ class MainViewModel(
     fun createNewProduct(
         name: String,
         code: String,
+        brandOrOrigin: String,
         sellPrice: Double,
         hppPrice: Double,
         savingsPerUnit: Double,
@@ -230,6 +371,7 @@ class MainViewModel(
             val p = Product(
                 name = name,
                 code = code,
+                brandOrOrigin = brandOrOrigin.ifBlank { "Pabrik Utama" },
                 sellPrice = sellPrice,
                 hppPrice = hppPrice,
                 savingsPerUnit = savingsPerUnit,

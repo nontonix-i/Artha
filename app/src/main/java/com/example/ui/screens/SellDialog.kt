@@ -31,7 +31,7 @@ import com.example.ui.theme.*
 fun SellDialog(
     products: List<Product>,
     onDismiss: () -> Unit,
-    onConfirmSale: (product: Product, quantity: Long, isSavingsIncluded: Boolean) -> Unit
+    onConfirmSale: (product: Product, quantity: Long, isSavingsIncluded: Boolean, note: String) -> Unit
 ) {
     if (products.isEmpty()) {
         AlertDialog(
@@ -48,6 +48,7 @@ fun SellDialog(
     var selectedProduct by remember { mutableStateOf(products.first()) }
     var quantityText by remember { mutableStateOf("1") }
     var isSavingsIncluded by remember { mutableStateOf(true) }
+    var noteInput by remember { mutableStateOf("") }
     var expandedDropdown by remember { mutableStateOf(false) }
 
     val quantity = quantityText.toLongOrNull()?.coerceAtLeast(1L) ?: 1L
@@ -94,7 +95,7 @@ fun SellDialog(
 
                 // Product Picker
                 Text(
-                    text = "Pilih Produk",
+                    text = "Pilih Produk & Asal Merk",
                     style = MaterialTheme.typography.labelMedium,
                     color = TextSecondary
                 )
@@ -104,7 +105,7 @@ fun SellDialog(
                     onExpandedChange = { expandedDropdown = !expandedDropdown }
                 ) {
                     OutlinedTextField(
-                        value = "${selectedProduct.name} (${formatRupiah(selectedProduct.sellPrice)})",
+                        value = "${selectedProduct.name} [${selectedProduct.brandOrOrigin.ifBlank { "Pabrik Utama" }}] - ${formatRupiah(selectedProduct.sellPrice)}",
                         onValueChange = {},
                         readOnly = true,
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
@@ -121,9 +122,20 @@ fun SellDialog(
                             DropdownMenuItem(
                                 text = {
                                     Column {
-                                        Text(prod.name, fontWeight = FontWeight.SemiBold)
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Text(prod.name, fontWeight = FontWeight.SemiBold)
+                                            Text(
+                                                prod.brandOrOrigin.ifBlank { "Pabrik Utama" },
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = CobaltPrimary
+                                            )
+                                        }
                                         Text(
-                                            "Jual: ${formatRupiah(prod.sellPrice)} | HPP: ${formatRupiah(prod.hppPrice)}",
+                                            "Jual: ${formatRupiah(prod.sellPrice)} | Modal HPP: ${formatRupiah(prod.hppPrice)}",
                                             fontSize = 12.sp,
                                             color = TextSecondary
                                         )
@@ -138,7 +150,7 @@ fun SellDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Quantity Input & Stepper
                 Text(
@@ -183,7 +195,7 @@ fun SellDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Mandatory Deposit & Savings Checklist Toggle (Key User Request)
                 Card(
@@ -227,7 +239,20 @@ fun SellDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Optional Note
+                OutlinedTextField(
+                    value = noteInput,
+                    onValueChange = { noteInput = it },
+                    label = { Text("Catatan / Keterangan (Opsional)") },
+                    placeholder = { Text("Contoh: Pembeli langganan / titip warung") },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    singleLine = true
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
 
                 // Real-time Financial Breakdown Box
                 Box(
@@ -236,21 +261,28 @@ fun SellDialog(
                         .clip(RoundedCornerShape(14.dp))
                         .background(SlateBackground)
                         .border(1.dp, BorderSubtle, RoundedCornerShape(14.dp))
-                        .padding(14.dp)
+                        .padding(12.dp)
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Total Kas Omset", fontSize = 12.sp, color = TextSecondary)
+                            Text("Asal Barang/Pabrik", fontSize = 11.sp, color = TextSecondary)
+                            Text(selectedProduct.brandOrOrigin.ifBlank { "Pabrik Utama" }, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = CobaltPrimary)
+                        }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Total Kas Omset", fontSize = 11.sp, color = TextSecondary)
                             Text(formatRupiah(totalRevenue), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary)
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text("Setoran Wajib (Ke Pabrik/Bos)", fontSize = 12.sp, color = TextSecondary)
+                            Text("Setoran Wajib (${selectedProduct.brandOrOrigin})", fontSize = 11.sp, color = TextSecondary)
                             Text(formatRupiah(totalDeposit), fontSize = 12.sp, fontWeight = FontWeight.Bold, color = CobaltPrimary)
                         }
                         if (isSavingsIncluded) {
@@ -258,28 +290,28 @@ fun SellDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
-                                Text("Pundi Tabungan Masuk", fontSize = 12.sp, color = TextSecondary)
-                                Text(formatRupiah(totalSavings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF06B6D4))
+                                Text("Pundi Tabungan Masuk", fontSize = 11.sp, color = TextSecondary)
+                                Text(formatRupiah(totalSavings), fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF0284C7))
                             }
                         }
-                        Divider(color = BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
+                        HorizontalDivider(color = BorderSubtle, thickness = 1.dp, modifier = Modifier.padding(vertical = 4.dp))
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Estimasi Laba Sales", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-                            Text(formatRupiah(netMarginSales), fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ProfitGreen)
+                            Text("Estimasi Laba Sales", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text(formatRupiah(netMarginSales), fontSize = 13.sp, fontWeight = FontWeight.Bold, color = ProfitGreen)
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 // Confirm Button
                 Button(
                     onClick = {
-                        onConfirmSale(selectedProduct, quantity, isSavingsIncluded)
+                        onConfirmSale(selectedProduct, quantity, isSavingsIncluded, noteInput)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
