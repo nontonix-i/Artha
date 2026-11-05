@@ -50,6 +50,17 @@ jobs:
             cp .env.example .env
           fi
 
+          # Prepare app/google-services.json if missing (e.g. from GitHub Secret or fallback)
+          if [ ! -f app/google-services.json ]; then
+            if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+              echo "Restoring google-services.json from GitHub Secrets..."
+              echo "${{ secrets.GOOGLE_SERVICES_JSON }}" > app/google-services.json
+            else
+              echo "Generating fallback google-services.json for CI compilation..."
+              echo '{"project_info":{"project_number":"679808610868","project_id":"comicsa-479217","storage_bucket":"comicsa-479217.firebasestorage.app"},"client":[{"client_info":{"mobilesdk_app_id":"1:679808610868:android:44436f9366c6eaabd89061","android_client_info":{"package_name":"com.aistudio.arthastock.vyzrtp"}},"oauth_client":[{"client_id":"679808610868-tuoc5l0d2b74h639lf0m4s3ono72p206.apps.googleusercontent.com","client_type":3}],"api_key":[{"current_key":"AIzaSyDRtpStWlq9NbAmtKz36bVCD4qPrE01AiY"}]}],"configuration_version":"1"}' > app/google-services.json
+            fi
+          fi
+
           # Ensure gradlew has executable permissions
           chmod +x gradlew
 

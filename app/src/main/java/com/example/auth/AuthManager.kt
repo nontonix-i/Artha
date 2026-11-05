@@ -45,10 +45,11 @@ class AuthManager(private val context: Context) {
     }
 
     private fun getWebClientId(): String? {
-        return try {
-            context.getString(R.string.default_web_client_id)
-        } catch (e: Exception) {
-            Log.e("AuthManager", "default_web_client_id tidak ditemukan di resources", e)
+        val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+        return if (resId != 0) {
+            context.getString(resId)
+        } else {
+            Log.e("AuthManager", "default_web_client_id tidak ditemukan di resources (periksa google-services.json)")
             null
         }
     }
