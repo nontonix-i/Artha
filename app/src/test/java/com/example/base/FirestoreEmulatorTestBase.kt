@@ -22,7 +22,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.LooperMode
 
 @RunWith(RobolectricTestRunner::class)
-@Config(manifest = Config.NONE)
+@Config(manifest = Config.NONE, sdk = [34])
 @LooperMode(LooperMode.Mode.INSTRUMENTATION_TEST)
 abstract class FirestoreEmulatorTestBase {
 
@@ -32,6 +32,10 @@ abstract class FirestoreEmulatorTestBase {
 
   @Before
   open fun setUpFirebase() {
+    org.junit.Assume.assumeTrue(
+      "Firebase emulators not running on $EMULATOR_HOST:$FIRESTORE_PORT; skipping emulator tests on CI",
+      isEmulatorReachable()
+    )
     val context = ApplicationProvider.getApplicationContext<Context>()
     val resId = context.resources.getIdentifier("firestore_database_id", "string", context.packageName)
     databaseId = if (resId != 0) context.getString(resId) else "demo-database"
@@ -64,7 +68,11 @@ abstract class FirestoreEmulatorTestBase {
 
   @After
   open fun tearDownFirebase() {
-    auth.signOut()
+    if (::auth.isInitialized) {
+      try {
+        auth.signOut()
+      } catch (_: Exception) {}
+    }
   }
 
   protected suspend fun signInTestUser(email: String): String = withContext(Dispatchers.IO) {
@@ -94,5 +102,16 @@ abstract class FirestoreEmulatorTestBase {
     const val PROJECT_ID = "demo-no-project"
     const val DEFAULT_PASSWORD = "password123"
     const val AUTH_TIMEOUT_MS = 5000L
+
+    fun isEmulatorReachable(): Boolean {
+      return try {
+        java.net.Socket().use { socket ->
+          socket.connect(java.net.InetSocketAddress(EMULATOR_HOST, FIRESTORE_PORT), 500)
+          true
+        }
+      } catch (e: Exception) {
+        false
+      }
+    }
   }
 }
