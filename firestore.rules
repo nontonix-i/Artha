@@ -1,0 +1,164 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Default deny all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidUserProfile(data) {
+      return data.uid is string && data.uid == request.auth.uid &&
+             data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100 &&
+             data.email is string && data.email.size() <= 100 &&
+             data.role in ['ADMIN', 'SALES'] &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    function isValidProduct(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+             data.sellPrice is number && data.sellPrice >= 0 &&
+             data.hppPrice is number && data.hppPrice >= 0 &&
+             data.savingsPerUnit is number && data.savingsPerUnit >= 0 &&
+             data.active is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('code' in data) || (data.code is string && data.code.size() <= 50)) &&
+             (!('category' in data) || (data.category is string && data.category.size() <= 50)) &&
+             (!('mandatoryDepositDefault' in data) || data.mandatoryDepositDefault is number) &&
+             (!('updatedAt' in data) || (data.updatedAt is timestamp && data.updatedAt <= request.time));
+    }
+
+    function isValidUserStock(data) {
+      return data.userId is string &&
+             data.productId is string &&
+             data.totalAvailableStock is int && data.totalAvailableStock >= 0 &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time &&
+             (!('productName' in data) || (data.productName is string && data.productName.size() <= 100)) &&
+             (!('rolloverFromLastWeek' in data) || data.rolloverFromLastWeek is int) &&
+             (!('currentWeekAllocation' in data) || data.currentWeekAllocation is int) &&
+             (!('transfersReceived' in data) || data.transfersReceived is int) &&
+             (!('transfersSent' in data) || data.transfersSent is int) &&
+             (!('debtBorrowed' in data) || data.debtBorrowed is int) &&
+             (!('soldCount' in data) || data.soldCount is int);
+    }
+
+    function isValidWeeklyPool(data) {
+      return data.weekIdentifier is string && data.weekIdentifier.size() > 0 && data.weekIdentifier.size() <= 50 &&
+             data.productId is string &&
+             data.totalPoolQty is int && data.totalPoolQty >= 0 &&
+             data.allocatedQty is int && data.allocatedQty >= 0 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('productName' in data) || (data.productName is string && data.productName.size() <= 100)) &&
+             (!('createdBy' in data) || data.createdBy is string);
+    }
+
+    function isValidTransfer(data) {
+      return data.fromUserId is string && data.fromUserId == request.auth.uid &&
+             data.toUserId is string && data.toUserId.size() > 0 &&
+             data.productId is string &&
+             data.quantity is int && data.quantity > 0 &&
+             data.timestamp is timestamp && data.timestamp <= request.time &&
+             (!('fromUserName' in data) || (data.fromUserName is string && data.fromUserName.size() <= 100)) &&
+             (!('toUserName' in data) || (data.toUserName is string && data.toUserName.size() <= 100)) &&
+             (!('productName' in data) || (data.productName is string && data.productName.size() <= 100)) &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 200));
+    }
+
+    function isValidDebt(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.type in ['SETORAN_TERTUNDA', 'PINJAM_BARANG'] &&
+             data.totalNominal is number && data.totalNominal >= 0 &&
+             data.isSettled is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             (!('userName' in data) || (data.userName is string && data.userName.size() <= 100)) &&
+             (!('productId' in data) || data.productId is string) &&
+             (!('productName' in data) || (data.productName is string && data.productName.size() <= 100)) &&
+             (!('quantity' in data) || data.quantity is int) &&
+             (!('settledAt' in data) || data.settledAt == null || (data.settledAt is timestamp && data.settledAt <= request.time));
+    }
+
+    function isValidTransaction(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.productId is string &&
+             data.quantity is int && data.quantity > 0 &&
+             data.totalRevenue is number && data.totalRevenue >= 0 &&
+             data.totalMandatoryDeposit is number && data.totalMandatoryDeposit >= 0 &&
+             data.timestamp is timestamp && data.timestamp <= request.time &&
+             (!('userName' in data) || (data.userName is string && data.userName.size() <= 100)) &&
+             (!('productName' in data) || (data.productName is string && data.productName.size() <= 100)) &&
+             (!('sellPricePerUnit' in data) || data.sellPricePerUnit is number) &&
+             (!('hppPerUnit' in data) || data.hppPerUnit is number) &&
+             (!('savingsPerUnit' in data) || data.savingsPerUnit is number) &&
+             (!('isSavingsIncluded' in data) || data.isSavingsIncluded is bool) &&
+             (!('totalHpp' in data) || data.totalHpp is number) &&
+             (!('totalSavings' in data) || data.totalSavings is number) &&
+             (!('netMarginSales' in data) || data.netMarginSales is number) &&
+             (!('isDepositSettled' in data) || data.isDepositSettled is bool);
+    }
+
+    // Match rules
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUserProfile(incoming());
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+                       incoming().uid == existing().uid &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming());
+    }
+
+    match /products/{productId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidProduct(incoming());
+      allow update: if isSignedIn() && incoming().createdAt == existing().createdAt && isValidProduct(incoming());
+      allow delete: if isSignedIn();
+    }
+
+    match /user_stock/{stockId} {
+      allow get: if isSignedIn();
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create, update: if isSignedIn() && isValidUserStock(incoming());
+    }
+
+    match /weekly_pools/{poolId} {
+      allow get, list: if isSignedIn();
+      allow create: if isSignedIn() && isValidWeeklyPool(incoming());
+      allow update: if isSignedIn() && incoming().createdAt == existing().createdAt && isValidWeeklyPool(incoming());
+    }
+
+    match /transfers/{transferId} {
+      allow get: if isSignedIn() && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
+      allow list: if isSignedIn() && (resource.data.fromUserId == request.auth.uid || resource.data.toUserId == request.auth.uid);
+      allow create: if isSignedIn() && isValidTransfer(incoming());
+    }
+
+    match /debts/{debtId} {
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidDebt(incoming());
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt && isValidDebt(incoming());
+    }
+
+    match /transactions/{transactionId} {
+      allow get, list: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && isValidTransaction(incoming());
+      allow update: if isSignedIn() && existing().userId == request.auth.uid && incoming().userId == existing().userId && incoming().createdAt == existing().createdAt && isValidTransaction(incoming());
+    }
+  }
+}

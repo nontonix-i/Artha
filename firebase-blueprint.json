@@ -1,0 +1,164 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account information and role within ArthaStock",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Google Auth UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "role": { "type": "string", "enum": ["ADMIN", "SALES"], "description": "Access role" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp" }
+      },
+      "required": ["uid", "displayName", "email", "role", "createdAt"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Inventory product item with selling price, factory cost (HPP), and savings unit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Product document ID" },
+        "name": { "type": "string", "description": "Product name" },
+        "code": { "type": "string", "description": "SKU or barcode" },
+        "sellPrice": { "type": "number", "description": "Selling price to consumers" },
+        "hppPrice": { "type": "number", "description": "Cost of goods sold / factory price" },
+        "savingsPerUnit": { "type": "number", "description": "Configured savings per sold unit" },
+        "mandatoryDepositDefault": { "type": "number", "description": "Default mandatory deposit (HPP + Savings)" },
+        "category": { "type": "string", "description": "Category name" },
+        "active": { "type": "boolean", "description": "Whether the product is currently active" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last updated timestamp" }
+      },
+      "required": ["name", "sellPrice", "hppPrice", "savingsPerUnit", "active", "createdAt"]
+    },
+    "UserStock": {
+      "title": "UserStock",
+      "description": "Aggregate and origin breakdown stock for a specific user and product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Composite ID: userId_productId" },
+        "userId": { "type": "string", "description": "Assigned user UID" },
+        "productId": { "type": "string", "description": "Product ID" },
+        "productName": { "type": "string", "description": "Cached product name" },
+        "totalAvailableStock": { "type": "integer", "description": "Current available quantity" },
+        "rolloverFromLastWeek": { "type": "integer", "description": "Stock carried over from previous week" },
+        "currentWeekAllocation": { "type": "integer", "description": "Stock allocated from this week's pool" },
+        "transfersReceived": { "type": "integer", "description": "Total stock received via peer transfer" },
+        "transfersSent": { "type": "integer", "description": "Total stock transferred to other users" },
+        "debtBorrowed": { "type": "integer", "description": "Stock borrowed/consigned" },
+        "soldCount": { "type": "integer", "description": "Total quantity sold" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last modified timestamp" }
+      },
+      "required": ["userId", "productId", "totalAvailableStock", "updatedAt"]
+    },
+    "WeeklyPool": {
+      "title": "WeeklyPool",
+      "description": "Weekly pool shipment and distribution record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Pool ID" },
+        "weekIdentifier": { "type": "string", "description": "Week code e.g. 2026-W45" },
+        "productId": { "type": "string", "description": "Product ID" },
+        "productName": { "type": "string", "description": "Product name" },
+        "totalPoolQty": { "type": "integer", "description": "Total shipment batch received" },
+        "allocatedQty": { "type": "integer", "description": "Total quantity distributed to users" },
+        "createdBy": { "type": "string", "description": "Admin UID" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["weekIdentifier", "productId", "totalPoolQty", "allocatedQty", "createdAt"]
+    },
+    "Transfer": {
+      "title": "Transfer",
+      "description": "Stock transfer record between two users",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Transfer record ID" },
+        "fromUserId": { "type": "string", "description": "Sender user UID" },
+        "fromUserName": { "type": "string", "description": "Sender display name" },
+        "toUserId": { "type": "string", "description": "Recipient user UID" },
+        "toUserName": { "type": "string", "description": "Recipient display name" },
+        "productId": { "type": "string", "description": "Product ID" },
+        "productName": { "type": "string", "description": "Product name" },
+        "quantity": { "type": "integer", "description": "Transferred quantity" },
+        "note": { "type": "string", "description": "Optional transfer notes" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Timestamp of transfer" }
+      },
+      "required": ["fromUserId", "toUserId", "productId", "quantity", "timestamp"]
+    },
+    "DebtRecord": {
+      "title": "DebtRecord",
+      "description": "Debt or pending deposit tracking record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Debt record ID" },
+        "userId": { "type": "string", "description": "Debtor user UID" },
+        "userName": { "type": "string", "description": "Debtor name" },
+        "type": { "type": "string", "enum": ["SETORAN_TERTUNDA", "PINJAM_BARANG"], "description": "Type of debt" },
+        "productId": { "type": "string", "description": "Product ID if item loan" },
+        "productName": { "type": "string", "description": "Product name" },
+        "quantity": { "type": "integer", "description": "Quantity of items" },
+        "totalNominal": { "type": "number", "description": "Total monetary value of debt" },
+        "isSettled": { "type": "boolean", "description": "Whether debt has been paid/cleared" },
+        "settledAt": { "type": "string", "format": "date-time", "description": "Settlement timestamp" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Record creation timestamp" }
+      },
+      "required": ["userId", "type", "totalNominal", "isSettled", "createdAt"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "Sale transaction with HPP, savings, mandatory deposit, and net margin",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Transaction ID" },
+        "userId": { "type": "string", "description": "Seller user UID" },
+        "userName": { "type": "string", "description": "Seller display name" },
+        "productId": { "type": "string", "description": "Sold product ID" },
+        "productName": { "type": "string", "description": "Sold product name" },
+        "quantity": { "type": "integer", "description": "Sold unit count" },
+        "sellPricePerUnit": { "type": "number", "description": "Unit sell price" },
+        "hppPerUnit": { "type": "number", "description": "Unit HPP factory cost" },
+        "savingsPerUnit": { "type": "number", "description": "Unit savings value" },
+        "isSavingsIncluded": { "type": "boolean", "description": "Whether savings was checked/included" },
+        "totalRevenue": { "type": "number", "description": "Total gross sale" },
+        "totalHpp": { "type": "number", "description": "Total HPP cost" },
+        "totalSavings": { "type": "number", "description": "Total savings accumulated" },
+        "totalMandatoryDeposit": { "type": "number", "description": "Mandatory deposit due (HPP + Savings)" },
+        "netMarginSales": { "type": "number", "description": "Net margin profit for sales" },
+        "isDepositSettled": { "type": "boolean", "description": "Whether mandatory deposit was settled" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "Sale timestamp" }
+      },
+      "required": ["userId", "productId", "quantity", "totalRevenue", "totalMandatoryDeposit", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profiles and permissions"
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Master products and pricing configurations"
+    },
+    "/user_stock/{stockId}": {
+      "schema": "UserStock",
+      "description": "Per-user stock inventories and source breakdowns"
+    },
+    "/weekly_pools/{poolId}": {
+      "schema": "WeeklyPool",
+      "description": "Weekly pool shipment and distribution ledger"
+    },
+    "/transfers/{transferId}": {
+      "schema": "Transfer",
+      "description": "Inter-user item transfer audit records"
+    },
+    "/debts/{debtId}": {
+      "schema": "DebtRecord",
+      "description": "Debt and pending deposit tracking records"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Sales ledger with cash flow, HPP, savings, and deposit metrics"
+    }
+  }
+}

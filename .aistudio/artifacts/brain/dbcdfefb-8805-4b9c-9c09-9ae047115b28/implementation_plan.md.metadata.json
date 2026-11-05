@@ -1,0 +1,6 @@
+{
+  "summary": "Pembaruan rencana implementasi ArthaStock: Menambahkan fitur 'Setoran Wajib' (HPP + Tabungan, contoh: Rp 11.000 HPP + Rp 500 tabungan = Rp 11.500), dilengkapi toggle checklist fleksibel untuk mengaktifkan/menonaktifkan tabungan per transaksi, pemisahan kas modal pabrik, kas tabungan cadangan, dan margin laba sales.",
+  "updatedAt": "2026-11-05T07:06:05.173172627Z",
+  "requestFeedback": true,
+  "userFacing": true
+}

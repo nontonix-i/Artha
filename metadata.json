@@ -1,0 +1,6 @@
+{
+  "name": "ArthaStock",
+  "description": "Sistem Manajemen Inventaris & Finansial Real-Time",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
